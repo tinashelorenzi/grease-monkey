@@ -33,15 +33,27 @@ const styles = StyleSheet.create({
   
   // Variants
   default: {
-    ...theme.shadows.component.card,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 2,
   },
   elevated: {
-    ...theme.shadows.component.modal,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
   },
   outlined: {
     borderWidth: theme.borders.width.thin,
     borderColor: theme.colors.border.primary,
-    ...theme.shadows.getShadow('none'),
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   
   // Padding variants

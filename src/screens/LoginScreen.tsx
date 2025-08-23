@@ -1,18 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
+  TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../theme';
 import { Button, Card, Text } from '../components/common';
 import { TextInput } from 'react-native';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { authService } from '../services';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -24,6 +28,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  
+  const passwordInputRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -64,103 +73,207 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     }
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.container}>
+      {/* Background Gradient */}
+      <LinearGradient
+        colors={[
+          theme.colors.primary.darkBlue,
+          theme.colors.primary.lightBlue,
+          theme.colors.background.primary,
+        ]}
+        style={styles.background}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+      />
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled={true}
       >
-        {/* Header */}
+        {/* Header Section */}
         <View style={styles.header}>
-          <Text variant="h1" color="primary" align="center" style={styles.title}>
+          <View style={styles.logoContainer}>
+            <View style={styles.logoCircle}>
+              <Ionicons 
+                name="build" 
+                size={48} 
+                color={theme.colors.primary.tan} 
+              />
+            </View>
+          </View>
+          
+          <Text style={styles.appTitle}>
             Grease Monkey
           </Text>
-          <Text variant="body1" color="secondary" align="center" style={styles.subtitle}>
+          <Text style={styles.appSubtitle}>
             Your trusted automotive partner
           </Text>
         </View>
 
         {/* Login Card */}
-        <Card variant="elevated" style={styles.loginCard}>
-          <Text variant="h2" style={styles.cardTitle}>
-            Welcome Back
-          </Text>
-          <Text variant="body2" color="secondary" style={styles.cardSubtitle}>
-            Sign in to access your account
-          </Text>
-
-          {/* Email Input */}
-          <View style={styles.inputContainer}>
-            <Text variant="body2" style={styles.inputLabel}>
-              Email Address
+        <Card style={styles.loginCard}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>
+              Welcome Back
             </Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter your email"
-              placeholderTextColor={theme.colors.text.tertiary}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+            <Text style={styles.cardSubtitle}>
+              Sign in to access your account
+            </Text>
           </View>
 
-          {/* Password Input */}
-          <View style={styles.inputContainer}>
-            <Text variant="body2" style={styles.inputLabel}>
-              Password
-            </Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter your password"
-              placeholderTextColor={theme.colors.text.tertiary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
+          <View style={styles.formContainer}>
+            {/* Email Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Email Address
+              </Text>
+              <View style={[
+                styles.inputContainer,
+                emailFocused && styles.inputContainerFocused,
+              ]}>
+                <Ionicons 
+                  name="mail-outline" 
+                  size={20} 
+                  color={emailFocused ? theme.colors.primary.darkBlue : theme.colors.text.tertiary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter your email"
+                  placeholderTextColor={theme.colors.text.tertiary}
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={() => setEmailFocused(true)}
+                  onBlur={() => setEmailFocused(false)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  textContentType="none"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordInputRef.current?.focus()}
+                  selectTextOnFocus={false}
+                  clearButtonMode="never"
+                />
+              </View>
+            </View>
+
+            {/* Password Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Password
+              </Text>
+              <View style={[
+                styles.inputContainer,
+                passwordFocused && styles.inputContainerFocused,
+              ]}>
+                <Ionicons 
+                  name="lock-closed-outline" 
+                  size={20} 
+                  color={passwordFocused ? theme.colors.primary.darkBlue : theme.colors.text.tertiary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  ref={passwordInputRef}
+                  style={[styles.textInput, styles.passwordInput]}
+                  placeholder="Enter your password"
+                  placeholderTextColor={theme.colors.text.tertiary}
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="off"
+                  textContentType="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                  selectTextOnFocus={false}
+                  clearButtonMode="never"
+                />
+                <TouchableOpacity
+                  onPress={togglePasswordVisibility}
+                  style={styles.passwordToggle}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color={theme.colors.text.tertiary}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Forgot Password Link */}
+            <TouchableOpacity
+              onPress={handleForgotPassword}
+              style={styles.forgotPasswordContainer}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.forgotPasswordText}>
+                Forgot your password?
+              </Text>
+            </TouchableOpacity>
+
+            {/* Login Button */}
+            <Button
+              title="Sign In"
+              onPress={handleLogin}
+              variant="primary"
+              size="lg"
+              loading={isLoading}
+              style={styles.loginButton}
             />
           </View>
-
-          {/* Login Button */}
-          <Button
-            title="Sign In"
-            onPress={handleLogin}
-            variant="primary"
-            size="lg"
-            loading={isLoading}
-            style={styles.loginButton}
-          />
-
-          {/* Forgot Password */}
-          <Button
-            title="Forgot Password?"
-            onPress={handleForgotPassword}
-            variant="ghost"
-            size="sm"
-            style={styles.forgotButton}
-          />
         </Card>
 
         {/* Register Section */}
         <View style={styles.registerSection}>
-          <Text variant="body1" color="secondary" align="center">
+          <Text style={styles.registerText}>
             Don't have an account?
           </Text>
-          <Button
-            title="Create Account"
+          <TouchableOpacity
             onPress={handleRegister}
-            variant="outline"
-            size="md"
             style={styles.registerButton}
-          />
+            activeOpacity={0.8}
+          >
+            <Text style={styles.registerButtonText}>
+              Create Account
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Features Section */}
+        <View style={styles.featuresSection}>
+          <Text style={styles.featuresTitle}>
+            Why Choose Grease Monkey?
+          </Text>
+          <View style={styles.featuresList}>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={20} color={theme.colors.semantic.success.primary} />
+              <Text style={styles.featureText}>Professional certified mechanics</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={20} color={theme.colors.semantic.success.primary} />
+              <Text style={styles.featureText}>24/7 emergency service</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={20} color={theme.colors.semantic.success.primary} />
+              <Text style={styles.featureText}>Transparent pricing</Text>
+            </View>
+          </View>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -169,65 +282,194 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background.primary,
   },
+  background: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: screenHeight * 0.6,
+  },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xl,
-    paddingBottom: theme.spacing.xl,
+    paddingHorizontal: theme.spacing[5], // 20px
+    paddingTop: theme.spacing[12], // 48px
+    paddingBottom: theme.spacing[8], // 32px
   },
+  
+  // Header styles
   header: {
-    marginBottom: theme.spacing['2xl'],
-    paddingTop: theme.spacing['2xl'],
+    alignItems: 'center',
+    marginBottom: theme.spacing[10], // 40px
   },
-  title: {
-    marginBottom: theme.spacing.lg,
+  logoContainer: {
+    marginBottom: theme.spacing[6], // 24px
   },
-  subtitle: {
-    opacity: 0.8,
-    marginTop: theme.spacing.sm,
+  logoCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: theme.colors.primary.darkBlue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.component.card.elevated,
   },
+  appTitle: {
+    fontSize: theme.typography.fontSize['4xl'], // 36px
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.text.inverse,
+    marginBottom: theme.spacing[2], // 8px
+    textAlign: 'center',
+  },
+  appSubtitle: {
+    fontSize: theme.typography.fontSize.lg, // 18px
+    fontWeight: theme.typography.fontWeight.normal,
+    color: theme.colors.text.inverse,
+    opacity: 0.9,
+    textAlign: 'center',
+  },
+  
+  // Card styles
   loginCard: {
-    marginBottom: theme.spacing.xl,
+    marginBottom: theme.spacing[8], // 32px
+    backgroundColor: theme.colors.background.card,
+    borderRadius: theme.components.card.radius.base, // 12px
+    ...theme.shadows.component.card.elevated,
+  },
+  cardHeader: {
+    marginBottom: theme.spacing[8], // 32px
   },
   cardTitle: {
-    marginBottom: theme.spacing.lg,
+    fontSize: theme.typography.fontSize['2xl'], // 24px
+    fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.primary.darkBlue,
+    marginBottom: theme.spacing[2], // 8px
+    textAlign: 'center',
   },
   cardSubtitle: {
-    marginBottom: theme.spacing['2xl'],
+    fontSize: theme.typography.fontSize.base, // 16px
+    fontWeight: theme.typography.fontWeight.normal,
+    color: theme.colors.text.secondary,
+    textAlign: 'center',
   },
-  inputContainer: {
-    marginBottom: theme.spacing.lg,
+  
+  // Form styles
+  formContainer: {
+    gap: theme.spacing[6], // 24px
+  },
+  inputGroup: {
+    gap: theme.spacing[2], // 8px
   },
   inputLabel: {
-    marginBottom: theme.spacing.sm,
-    color: theme.colors.text.primary,
+    fontSize: theme.typography.fontSize.sm, // 14px
     fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.primary,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: theme.components.input.height.base, // 44px
+    borderWidth: theme.borders.width.thin, // 1px
+    borderColor: theme.colors.border.primary,
+    borderRadius: theme.components.input.radius, // 8px
+    backgroundColor: theme.colors.background.input,
+    paddingHorizontal: theme.spacing[4], // 16px
+    ...theme.shadows.component.input.default,
+  },
+  inputContainerFocused: {
+    borderColor: theme.colors.primary.darkBlue,
+    borderWidth: theme.borders.width.focus, // 2px
+    ...theme.shadows.component.input.focused,
+  },
+  inputIcon: {
+    marginRight: theme.spacing[3], // 12px
   },
   textInput: {
-    borderWidth: theme.borders.width.thin,
-    borderColor: theme.colors.border.primary,
-    borderRadius: theme.borders.radius.input,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.component.input.paddingVertical,
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: theme.typography.fontFamily.primary,
+    flex: 1,
+    fontSize: theme.typography.fontSize.base, // 16px
+    fontWeight: theme.typography.fontWeight.normal,
     color: theme.colors.text.primary,
-    backgroundColor: theme.colors.background.card,
+    padding: 0, // Remove default padding
   },
+  passwordInput: {
+    paddingRight: theme.spacing[10], // 40px for toggle button
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: theme.spacing[4], // 16px
+    width: theme.spacing[6], // 24px
+    height: theme.spacing[6], // 24px
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  // Forgot password
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
+    paddingVertical: theme.spacing[2], // 8px
+  },
+  forgotPasswordText: {
+    fontSize: theme.typography.fontSize.sm, // 14px
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.primary.darkBlue,
+  },
+  
+  // Login button
   loginButton: {
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.lg,
+    marginTop: theme.spacing[4], // 16px
   },
-  forgotButton: {
-    alignSelf: 'center',
-  },
+  
+  // Register section
   registerSection: {
     alignItems: 'center',
-    paddingTop: theme.spacing.lg,
+    paddingVertical: theme.spacing[6], // 24px
+    gap: theme.spacing[4], // 16px
+  },
+  registerText: {
+    fontSize: theme.typography.fontSize.base, // 16px
+    fontWeight: theme.typography.fontWeight.normal,
+    color: theme.colors.text.secondary,
   },
   registerButton: {
-    marginTop: theme.spacing.md,
-    minWidth: 200,
+    paddingVertical: theme.spacing[3], // 12px
+    paddingHorizontal: theme.spacing[6], // 24px
+    borderRadius: theme.components.button.radius, // 8px
+    borderWidth: theme.borders.width.thin, // 1px
+    borderColor: theme.colors.primary.darkBlue,
+    backgroundColor: 'transparent',
+  },
+  registerButtonText: {
+    fontSize: theme.typography.fontSize.base, // 16px
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.primary.darkBlue,
+  },
+  
+  // Features section
+  featuresSection: {
+    marginTop: theme.spacing[8], // 32px
+    paddingVertical: theme.spacing[6], // 24px
+    backgroundColor: theme.colors.background.secondary,
+    borderRadius: theme.components.card.radius.base, // 12px
+    paddingHorizontal: theme.spacing[5], // 20px
+  },
+  featuresTitle: {
+    fontSize: theme.typography.fontSize.lg, // 18px
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.primary.darkBlue,
+    marginBottom: theme.spacing[4], // 16px
+    textAlign: 'center',
+  },
+  featuresList: {
+    gap: theme.spacing[3], // 12px
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing[3], // 12px
+  },
+  featureText: {
+    fontSize: theme.typography.fontSize.sm, // 14px
+    fontWeight: theme.typography.fontWeight.normal,
+    color: theme.colors.text.secondary,
+    flex: 1,
   },
 });

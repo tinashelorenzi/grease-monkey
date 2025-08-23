@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { LoginScreen, RegisterScreen } from '../screens';
+import { LoginScreen, RegisterScreen, NearbyMechanicsScreen } from '../screens';
 import { TabNavigator } from './TabNavigator';
 import { useAuth } from '../contexts/AuthContext';
 import { theme } from '../theme';
@@ -11,6 +11,7 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   Main: undefined;
+  NearbyMechanics: { serviceType?: string };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -44,13 +45,23 @@ export const AppNavigator: React.FC = () => {
       >
         {user ? (
           // User is authenticated - show main app
-          <Stack.Screen
-            name="Main"
-            component={TabNavigator}
-            options={{
-              headerShown: false,
-            }}
-          />
+          <>
+            <Stack.Screen
+              name="Main"
+              component={TabNavigator}
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="NearbyMechanics"
+              component={NearbyMechanicsScreen}
+              options={{
+                headerShown: false,
+                presentation: 'modal',
+              }}
+            />
+          </>
         ) : (
           // User is not authenticated - show auth screens
           <>
