@@ -13,7 +13,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { theme } from '../theme';
 import { Card } from '../components/common';
-import { ServiceRequest, listenToRequestStatus, deleteServiceRequest } from '../services/requestService';
+import { ServiceRequest, listenToRequestStatus, deleteServiceRequest, updateRequestStatus } from '../services/requestService';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { getCurrentLocation } from '../services/mechanicService';
 import { findOrCreateChatSession, listenToMessages, markMessagesAsRead } from '../services/chatService';
@@ -44,6 +44,11 @@ export const RequestSessionScreen: React.FC = () => {
   const pulseOpacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
+    console.log('🚀 RequestSessionScreen mounted');
+    console.log('📋 Request ID:', requestId);
+    console.log('🔧 Mechanic Name:', mechanicName);
+    console.log('🔧 Service Type:', serviceType);
+    
     // Start listening to request status changes
     const unsubscribe = listenToRequestStatus(requestId, (updatedRequest) => {
       console.log('🔄 RequestSessionScreen received update:', updatedRequest);
@@ -54,6 +59,7 @@ export const RequestSessionScreen: React.FC = () => {
         console.log('📊 Request status:', updatedRequest.status);
         console.log('📊 Request ID:', updatedRequest.requestId);
         console.log('📊 Mechanic ID:', updatedRequest.mechanicId);
+        console.log('📊 Updated at:', new Date(updatedRequest.updatedAt).toLocaleString());
         
         // Handle different status changes
         if (updatedRequest.status === 'accepted') {
@@ -62,6 +68,8 @@ export const RequestSessionScreen: React.FC = () => {
           initializeChatSession();
         } else if (updatedRequest.status === 'quoted') {
           console.log('💰 Quote received from mechanic');
+          console.log('💰 Quote amount:', updatedRequest.quoteAmount);
+          console.log('💰 Quote description:', updatedRequest.quoteDescription);
           // Navigate to quote screen
           navigation.navigate('Quote', {
             requestId: requestId,
@@ -71,18 +79,22 @@ export const RequestSessionScreen: React.FC = () => {
             quoteDescription: updatedRequest.quoteDescription || '',
           });
         } else if (updatedRequest.status === 'completed') {
+          console.log('🎉 Service completed');
           Alert.alert(
             'Service Completed!',
             'Your service has been completed successfully.',
             [{ text: 'Great!', onPress: () => navigation.navigate('Main') }]
           );
         } else if (updatedRequest.status === 'declined') {
+          console.log('❌ Request declined by mechanic');
           Alert.alert(
             'Request Declined',
             `${mechanicName} is unable to take your request at this time.`,
             [{ text: 'OK', onPress: () => navigation.goBack() }]
           );
         }
+      } else {
+        console.log('⚠️ No request data received - this might be normal during initial load');
       }
     });
 
@@ -90,6 +102,7 @@ export const RequestSessionScreen: React.FC = () => {
     startPingAnimation();
 
     return () => {
+      console.log('🛑 RequestSessionScreen unmounting - cleaning up listeners');
       unsubscribe();
     };
   }, [requestId, mechanicName]);
@@ -246,6 +259,20 @@ export const RequestSessionScreen: React.FC = () => {
     );
   };
 
+  // Test function for development only
+  const handleTestStatusUpdate = async (newStatus: ServiceRequest['status']) => {
+    if (!__DEV__) return;
+    
+    try {
+      console.log('🧪 Testing status update to:', newStatus);
+      await updateRequestStatus(requestId, newStatus);
+      console.log('✅ Test status update completed');
+    } catch (error) {
+      console.error('❌ Test status update failed:', error);
+      Alert.alert('Test Error', 'Failed to update status for testing');
+    }
+  };
+
   const renderPingAnimation = () => (
     <View style={styles.animationContainer}>
       {/* Background pulse */}
@@ -277,32 +304,125 @@ export const RequestSessionScreen: React.FC = () => {
     </View>
   );
 
-  const renderStatusInfo = () => (
-    <Card style={styles.statusCard}>
-      <View style={styles.statusHeader}>
-        <Ionicons name="time-outline" size={24} color={theme.colors.primary.darkBlue} />
-        <Text style={styles.statusTitle}>Requesting Service</Text>
-      </View>
-      
-      <View style={styles.mechanicInfo}>
-        <Text style={styles.mechanicName}>{mechanicName}</Text>
-        <Text style={styles.serviceType}>
-          {serviceType.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-        </Text>
-      </View>
-      
-      <View style={styles.statusDetails}>
-        <View style={styles.statusItem}>
-          <Ionicons name="checkmark-circle" size={16} color={theme.colors.semantic.success.primary} />
-          <Text style={styles.statusText}>Request sent successfully</Text>
+  const renderStatusInfo = () => {
+    const getStatusInfo = () => {
+      if (!request) {
+        return {
+          title: 'Requesting Service',
+          icon: 'time-outline',
+          color: theme.colors.primary.darkBlue,
+          status: 'pending',
+          description: 'Waiting for mechanic to respond...',
+          details: [
+            { icon: 'checkmark-circle', color: theme.colors.semantic.success.primary, text: 'Request sent successfully' },
+            { icon: 'time-outline', color: theme.colors.text.secondary, text: 'Waiting for mechanic to respond...' }
+          ]
+        };
+      }
+
+      switch (request.status) {
+        case 'accepted':
+          return {
+            title: 'Request Accepted!',
+            icon: 'checkmark-circle',
+            color: theme.colors.semantic.success.primary,
+            status: 'accepted',
+            description: `${mechanicName} has accepted your request`,
+            details: [
+              { icon: 'checkmark-circle', color: theme.colors.semantic.success.primary, text: 'Request accepted by mechanic' },
+              { icon: 'person-outline', color: theme.colors.text.secondary, text: `${mechanicName} is on the way` }
+            ]
+          };
+        case 'quoted':
+          return {
+            title: 'Quote Received',
+            icon: 'card-outline',
+            color: theme.colors.semantic.info.primary,
+            status: 'quoted',
+            description: `${mechanicName} has sent you a quote`,
+            details: [
+              { icon: 'card-outline', color: theme.colors.semantic.info.primary, text: 'Quote received from mechanic' },
+              { icon: 'information-circle-outline', color: theme.colors.text.secondary, text: 'Review the quote details' }
+            ]
+          };
+        case 'completed':
+          return {
+            title: 'Service Completed',
+            icon: 'checkmark-done-circle',
+            color: theme.colors.semantic.success.primary,
+            status: 'completed',
+            description: 'Your service has been completed successfully',
+            details: [
+              { icon: 'checkmark-done-circle', color: theme.colors.semantic.success.primary, text: 'Service completed successfully' },
+              { icon: 'star-outline', color: theme.colors.text.secondary, text: 'Rate your experience' }
+            ]
+          };
+        case 'declined':
+          return {
+            title: 'Request Declined',
+            icon: 'close-circle',
+            color: theme.colors.semantic.error.primary,
+            status: 'declined',
+            description: `${mechanicName} is unable to take your request`,
+            details: [
+              { icon: 'close-circle', color: theme.colors.semantic.error.primary, text: 'Request declined by mechanic' },
+              { icon: 'arrow-back-outline', color: theme.colors.text.secondary, text: 'Try another mechanic' }
+            ]
+          };
+        default:
+          return {
+            title: 'Requesting Service',
+            icon: 'time-outline',
+            color: theme.colors.primary.darkBlue,
+            status: request.status,
+            description: 'Waiting for mechanic to respond...',
+            details: [
+              { icon: 'checkmark-circle', color: theme.colors.semantic.success.primary, text: 'Request sent successfully' },
+              { icon: 'time-outline', color: theme.colors.text.secondary, text: `Current status: ${request.status}` }
+            ]
+          };
+      }
+    };
+
+    const statusInfo = getStatusInfo();
+
+    return (
+      <Card style={styles.statusCard}>
+        <View style={styles.statusHeader}>
+          <Ionicons name={statusInfo.icon as any} size={24} color={statusInfo.color} />
+          <Text style={[styles.statusTitle, { color: statusInfo.color }]}>{statusInfo.title}</Text>
         </View>
-        <View style={styles.statusItem}>
-          <Ionicons name="time-outline" size={16} color={theme.colors.text.secondary} />
-          <Text style={styles.statusText}>Waiting for mechanic to respond...</Text>
+        
+        <View style={styles.mechanicInfo}>
+          <Text style={styles.mechanicName}>{mechanicName}</Text>
+          <Text style={styles.serviceType}>
+            {serviceType.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+          </Text>
         </View>
-      </View>
-    </Card>
-  );
+        
+        <Text style={styles.statusDescription}>{statusInfo.description}</Text>
+        
+        <View style={styles.statusDetails}>
+          {statusInfo.details.map((detail, index) => (
+            <View key={index} style={styles.statusItem}>
+              <Ionicons name={detail.icon as any} size={16} color={detail.color} />
+              <Text style={styles.statusText}>{detail.text}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Debug information */}
+        {__DEV__ && request && (
+          <View style={styles.debugInfo}>
+            <Text style={styles.debugTitle}>Debug Info:</Text>
+            <Text style={styles.debugText}>Request ID: {request.requestId}</Text>
+            <Text style={styles.debugText}>Status: {request.status}</Text>
+            <Text style={styles.debugText}>Updated: {new Date(request.updatedAt).toLocaleTimeString()}</Text>
+          </View>
+        )}
+      </Card>
+    );
+  };
 
   const renderRequestDetails = () => (
     <Card style={styles.detailsCard}>
@@ -334,6 +454,15 @@ export const RequestSessionScreen: React.FC = () => {
         <Text style={styles.detailValue}>
           {request ? new Date(request.createdAt).toLocaleTimeString() : 'Just now'}
         </Text>
+      </View>
+
+      {/* Connection status indicator */}
+      <View style={styles.connectionStatus}>
+        <View style={styles.statusIndicator}>
+          <View style={[styles.statusDot, { backgroundColor: theme.colors.semantic.success.primary }]} />
+          <Text style={styles.statusLabel}>Listening for updates</Text>
+        </View>
+        <Text style={styles.statusSubtext}>Real-time status monitoring active</Text>
       </View>
     </Card>
   );
@@ -384,6 +513,39 @@ export const RequestSessionScreen: React.FC = () => {
         <TouchableOpacity style={styles.cancelButton} onPress={handleCancelRequest}>
           <Text style={styles.cancelButtonText}>Cancel Request</Text>
         </TouchableOpacity>
+        
+        {/* Test buttons for development only */}
+        {__DEV__ && (
+          <View style={styles.testButtons}>
+            <Text style={styles.testTitle}>Test Status Updates:</Text>
+            <View style={styles.testButtonRow}>
+              <TouchableOpacity 
+                style={[styles.testButton, { backgroundColor: theme.colors.semantic.success.primary }]} 
+                onPress={() => handleTestStatusUpdate('accepted')}
+              >
+                <Text style={styles.testButtonText}>Accept</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.testButton, { backgroundColor: theme.colors.semantic.info.primary }]} 
+                onPress={() => handleTestStatusUpdate('quoted')}
+              >
+                <Text style={styles.testButtonText}>Quote</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.testButton, { backgroundColor: theme.colors.semantic.warning.primary }]} 
+                onPress={() => handleTestStatusUpdate('completed')}
+              >
+                <Text style={styles.testButtonText}>Complete</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.testButton, { backgroundColor: theme.colors.semantic.error.primary }]} 
+                onPress={() => handleTestStatusUpdate('declined')}
+              >
+                <Text style={styles.testButtonText}>Decline</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -499,6 +661,58 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.medium,
     color: theme.colors.text.secondary,
   },
+  statusDescription: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing[4],
+    lineHeight: theme.typography.lineHeight.normal * theme.typography.fontSize.base,
+  },
+  debugInfo: {
+    marginTop: theme.spacing[4],
+    paddingTop: theme.spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border.primary,
+  },
+  debugTitle: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[2],
+  },
+  debugText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.normal,
+    color: theme.colors.text.tertiary,
+    marginBottom: theme.spacing[1],
+  },
+  connectionStatus: {
+    marginTop: theme.spacing[4],
+    paddingTop: theme.spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border.primary,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing[2],
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: theme.spacing[2],
+  },
+  statusLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    color: theme.colors.text.primary,
+  },
+  statusSubtext: {
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.normal,
+    color: theme.colors.text.tertiary,
+  },
   detailsCard: {
     marginBottom: theme.spacing[4],
   },
@@ -541,6 +755,36 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.inverse,
+  },
+  testButtons: {
+    marginTop: theme.spacing[4],
+    paddingTop: theme.spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border.primary,
+  },
+  testTitle: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing[2],
+    textAlign: 'center',
+  },
+  testButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: theme.spacing[2],
+  },
+  testButton: {
+    flex: 1,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borders.radius.sm,
+    alignItems: 'center',
+  },
+  testButtonText: {
+    fontSize: theme.typography.fontSize.xs,
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.text.inverse,
   },
