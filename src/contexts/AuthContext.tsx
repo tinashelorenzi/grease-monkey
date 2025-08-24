@@ -32,11 +32,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const refreshUserProfile = async () => {
     if (user) {
       try {
+        console.log('🔄 Refreshing user profile for user:', user.uid);
         const profile = await authService.getCurrentUserProfile();
+        console.log('📋 User profile loaded:', profile);
         setUserProfile(profile);
       } catch (error) {
-        console.error('Failed to fetch user profile:', error);
+        console.error('❌ Failed to fetch user profile:', error);
       }
+    } else {
+      console.log('❌ No user to refresh profile for');
     }
   };
 
@@ -52,10 +56,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = authService.onAuthStateChanged(async (user) => {
+      console.log('👤 Auth state changed:', user ? user.uid : 'null');
       setUser(user);
       if (user) {
         await refreshUserProfile();
       } else {
+        console.log('👤 Setting user profile to null');
         setUserProfile(null);
       }
       setLoading(false);

@@ -14,7 +14,12 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { theme } from '../theme';
 import { Card, Text } from '../components/common';
 import { searchNearbyMechanics, getCurrentLocation, Mechanic, UserLocation } from '../services/mechanicService';
+import { createServiceRequest } from '../services/requestService';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { useAuth } from '../contexts/AuthContext';
+import { auth, db } from '../services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { UserProfile } from '../services/authService';
 
 type NearbyMechanicsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'NearbyMechanics'>;
 type NearbyMechanicsScreenRouteProp = RouteProp<RootStackParamList, 'NearbyMechanics'>;
@@ -32,29 +37,57 @@ export const NearbyMechanicsScreen: React.FC<NearbyMechanicsScreenProps> = ({
 }) => {
   const navigation = useNavigation<NearbyMechanicsScreenNavigationProp>();
   const route = useRoute<NearbyMechanicsScreenRouteProp>();
+  const { userProfile } = useAuth();
   const [mechanics, setMechanics] = useState<Mechanic[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creatingRequest, setCreatingRequest] = useState<string | null>(null);
+  const [localUserProfile, setLocalUserProfile] = useState<UserProfile | null>(null);
 
   // Get serviceType from route params or props
   const currentServiceType = route.params?.serviceType || serviceType;
 
   const loadMechanics = async (isRefresh = false) => {
     try {
+      console.log('🔄 Starting to load mechanics...');
       setError(null);
       
       // Get user's current location
+      console.log('📍 Getting user location...');
       const location = await getCurrentLocation();
+      console.log('📍 User location obtained:', location);
       setUserLocation(location);
 
+      // Fetch user profile from Firestore
+      console.log('👤 Fetching user profile...');
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (userDoc.exists()) {
+            const profile = userDoc.data() as UserProfile;
+            console.log('✅ User profile loaded:', profile);
+            setLocalUserProfile(profile);
+          } else {
+            console.log('❌ User document does not exist');
+            setLocalUserProfile(null);
+          }
+        } catch (profileError) {
+          console.error('❌ Error fetching user profile:', profileError);
+          setLocalUserProfile(null);
+        }
+      }
+
       // Search for nearby mechanics
+      console.log('🔍 Searching for nearby mechanics...');
       const nearbyMechanics = await searchNearbyMechanics(location, currentServiceType);
+      console.log('✅ Search completed, found', nearbyMechanics.length, 'mechanics');
       setMechanics(nearbyMechanics);
       
     } catch (err) {
-      console.error('Error loading mechanics:', err);
+      console.error('❌ Error loading mechanics:', err);
       setError(err instanceof Error ? err.message : 'Failed to load mechanics');
       
       if (!isRefresh) {
@@ -68,6 +101,7 @@ export const NearbyMechanicsScreen: React.FC<NearbyMechanicsScreenProps> = ({
         );
       }
     } finally {
+      console.log('🏁 Loading completed');
       setLoading(false);
       setRefreshing(false);
     }
@@ -82,21 +116,94 @@ export const NearbyMechanicsScreen: React.FC<NearbyMechanicsScreenProps> = ({
     loadMechanics(true);
   };
 
-  const handleMechanicSelect = (mechanic: Mechanic) => {
+  const handleMechanicSelect = async (mechanic: Mechanic) => {
+    console.log('🔘 Request Service button clicked for mechanic:', mechanic.id);
+    console.log('🔍 Auth state check:');
+    console.log('  authContext userProfile:', userProfile);
+    console.log('  localUserProfile:', localUserProfile);
+    console.log('  auth.currentUser:', auth.currentUser);
+    console.log('  auth.currentUser?.uid:', auth.currentUser?.uid);
+    console.log('📍 User location:', userLocation);
+    
     if (onMechanicSelect) {
+      console.log('📞 Using onMechanicSelect callback');
       onMechanicSelect(mechanic);
-    } else {
+      return;
+    }
+
+    if (!userLocation) {
+      console.log('❌ Missing user location');
+      Alert.alert('Error', 'Unable to get your location. Please try again.');
+      return;
+    }
+
+    // Use localUserProfile if available, otherwise fall back to Firebase auth user
+    const currentUser = localUserProfile || auth.currentUser;
+    if (!currentUser) {
+      console.log('❌ No user available');
+      Alert.alert('Error', 'Please log in to request a service.');
+      return;
+    }
+
+    console.log('✅ User available:', currentUser);
+
+    setCreatingRequest(mechanic.id);
+    console.log('⏳ Setting loading state for mechanic:', mechanic.id);
+
+    try {
+      console.log('📝 Creating request for mechanic:', mechanic.id);
+      // Prepare user data
+      const customerId = localUserProfile?.uid || auth.currentUser?.uid || 'unknown';
+      const customerName = localUserProfile 
+        ? `${localUserProfile.firstName} ${localUserProfile.lastName}`
+        : auth.currentUser?.displayName || 'Unknown User';
+      const customerPhone = localUserProfile?.phoneNumber || '';
+
+      console.log('📋 Request data:', {
+        customerId,
+        customerName,
+        customerPhone,
+        mechanicId: mechanic.id,
+        mechanicName: `${mechanic.firstName} ${mechanic.lastName}`,
+        serviceType: currentServiceType || 'general',
+        location: userLocation,
+      });
+      
+      const requestId = await createServiceRequest({
+        customerId,
+        customerName,
+        customerPhone,
+        mechanicId: mechanic.id,
+        mechanicName: `${mechanic.firstName} ${mechanic.lastName}`,
+        serviceType: currentServiceType || 'general',
+        location: userLocation,
+        description: `${currentServiceType?.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} service requested`,
+      });
+
+      console.log('✅ Request created successfully:', requestId);
+      
+      // Navigate to request session screen
+      console.log('🧭 Navigating to RequestSession with params:', {
+        requestId,
+        mechanicName: `${mechanic.firstName} ${mechanic.lastName}`,
+        serviceType: currentServiceType || 'general',
+      });
+      
+      navigation.navigate('RequestSession', {
+        requestId,
+        mechanicName: `${mechanic.firstName} ${mechanic.lastName}`,
+        serviceType: currentServiceType || 'general',
+      });
+
+    } catch (error) {
+      console.error('❌ Error creating request:', error);
       Alert.alert(
-        'Select Mechanic',
-        `Would you like to request ${mechanic.firstName} ${mechanic.lastName} for your service?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Request', onPress: () => {
-            Alert.alert('Success', 'Service request sent! The mechanic will contact you soon.');
-            navigation.goBack();
-          }},
-        ]
+        'Request Failed',
+        'Unable to create service request. Please try again.',
+        [{ text: 'OK' }]
       );
+    } finally {
+      setCreatingRequest(null);
     }
   };
 
@@ -196,27 +303,28 @@ export const NearbyMechanicsScreen: React.FC<NearbyMechanicsScreenProps> = ({
           </View>
         </View>
         
-        <View style={styles.detailRow}>
-          <View style={styles.detailItem}>
-            <Ionicons name="card-outline" size={16} color={theme.colors.text.tertiary} />
-            <Text style={styles.detailText}>
-              R{mechanic.preferences.hourlyRate}/hr
-            </Text>
-          </View>
-          
-          <View style={styles.detailItem}>
-            <Ionicons name="build-outline" size={16} color={theme.colors.text.tertiary} />
-            <Text style={styles.detailText}>
-              {mechanic.specializations.slice(0, 2).join(', ')}
-              {mechanic.specializations.length > 2 && '...'}
-            </Text>
-          </View>
-        </View>
+
       </View>
       
-      <TouchableOpacity style={styles.requestButton}>
-        <Text style={styles.requestButtonText}>Request Service</Text>
-        <Ionicons name="chevron-forward" size={16} color={theme.colors.text.inverse} />
+      <TouchableOpacity 
+        style={[
+          styles.requestButton,
+          creatingRequest === mechanic.id && styles.requestButtonLoading
+        ]}
+        disabled={creatingRequest === mechanic.id}
+        onPress={() => handleMechanicSelect(mechanic)}
+      >
+        {creatingRequest === mechanic.id ? (
+          <>
+            <Ionicons name="hourglass-outline" size={16} color={theme.colors.text.inverse} />
+            <Text style={styles.requestButtonText}>Creating...</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.requestButtonText}>Request Service</Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.text.inverse} />
+          </>
+        )}
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -455,6 +563,9 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.text.inverse,
+  },
+  requestButtonLoading: {
+    opacity: 0.7,
   },
   emptyContainer: {
     alignItems: 'center',

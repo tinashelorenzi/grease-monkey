@@ -6,3 +6,6 @@ export { HistoryTabScreen } from './HistoryTabScreen';
 export { PaymentsTabScreen } from './PaymentsTabScreen';
 export { ChatTabScreen } from './ChatTabScreen';
 export { NearbyMechanicsScreen } from './NearbyMechanicsScreen';
+export { RequestSessionScreen } from './RequestSessionScreen';
+export { ChatScreen } from './ChatScreen';
+export { QuoteScreen } from './QuoteScreen';

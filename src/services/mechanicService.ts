@@ -106,6 +106,11 @@ export const searchNearbyMechanics = async (
   maxDistance: number = 50 // Default 50km radius
 ): Promise<Mechanic[]> => {
   try {
+    console.log('🔍 Starting mechanic search...');
+    console.log('📍 User location:', userLocation);
+    console.log('🔧 Service type:', serviceType);
+    console.log('📏 Max distance:', maxDistance, 'km');
+
     // Create a bounding box for the search area
     const latDelta = maxDistance / 111; // Roughly 111km per degree latitude
     const lonDelta = maxDistance / (111 * Math.cos(userLocation.latitude * Math.PI / 180));
@@ -114,6 +119,10 @@ export const searchNearbyMechanics = async (
     const maxLat = userLocation.latitude + latDelta;
     const minLon = userLocation.longitude - lonDelta;
     const maxLon = userLocation.longitude + lonDelta;
+
+    console.log('🗺️ Search bounding box:');
+    console.log('  Min Lat:', minLat, 'Max Lat:', maxLat);
+    console.log('  Min Lon:', minLon, 'Max Lon:', maxLon);
 
     // Build the query
     let mechanicsQuery = query(
@@ -127,16 +136,52 @@ export const searchNearbyMechanics = async (
       limit(20) // Get more than 10 to filter by longitude and distance
     );
 
+    console.log('🔍 Executing Firestore query...');
     const querySnapshot = await getDocs(mechanicsQuery);
+    console.log('📊 Query returned', querySnapshot.size, 'documents');
+
+    // Debug: Let's also check if there are ANY mechanics in the database
+    const allMechanicsQuery = query(collection(db, 'mechanics'));
+    const allMechanicsSnapshot = await getDocs(allMechanicsQuery);
+    console.log('📊 Total mechanics in database:', allMechanicsSnapshot.size);
+    
+    if (allMechanicsSnapshot.size > 0) {
+      console.log('📋 All mechanics in database:');
+      allMechanicsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log(`  - ${doc.id}: ${data.firstName} ${data.lastName} (Online: ${data.isOnline}, Available: ${data.isAvailable}, Active: ${data.isActive})`);
+      });
+    }
+
     const mechanics: Mechanic[] = [];
 
     querySnapshot.forEach((doc) => {
       const data = doc.data();
+      console.log('👤 Processing mechanic:', doc.id);
+      console.log('  Data:', {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        isOnline: data.isOnline,
+        isAvailable: data.isAvailable,
+        isActive: data.isActive,
+        location: data.location,
+        specializations: data.specializations,
+        preferences: data.preferences
+      });
+      console.log('  Preferences:', {
+        maxDistance: data.preferences?.maxDistance || 'undefined (using default 50)',
+        hourlyRate: data.preferences?.hourlyRate || 'undefined'
+      });
+
       const mechanicLocation = data.location;
       
       if (mechanicLocation) {
+        console.log('📍 Mechanic location:', mechanicLocation);
+        
         // Filter by longitude (Firestore doesn't support multiple range queries easily)
         if (mechanicLocation.longitude >= minLon && mechanicLocation.longitude <= maxLon) {
+          console.log('✅ Mechanic within longitude bounds');
+          
           // Calculate actual distance
           const distance = calculateDistance(
             userLocation.latitude,
@@ -144,34 +189,51 @@ export const searchNearbyMechanics = async (
             mechanicLocation.latitude,
             mechanicLocation.longitude
           );
+          console.log('📏 Calculated distance:', distance, 'km');
 
           // Only include mechanics within maxDistance and their maxDistance preference
-          if (distance <= maxDistance && distance <= data.preferences?.maxDistance) {
-            // Filter by service type if specified
-            if (!serviceType || data.specializations?.includes(serviceType)) {
-              mechanics.push({
-                id: doc.id,
-                firstName: data.firstName,
-                lastName: data.lastName,
-                businessName: data.businessName,
-                rating: data.rating || 0,
-                totalJobs: data.totalJobs || 0,
-                yearsOfExperience: data.yearsOfExperience || 0,
-                specializations: data.specializations || [],
-                location: mechanicLocation,
-                preferences: data.preferences || { hourlyRate: 0, maxDistance: 50 },
-                isOnline: data.isOnline,
-                isAvailable: data.isAvailable,
-                distance: distance,
-              });
-            }
+          const mechanicMaxDistance = data.preferences?.maxDistance || 50; // Default to 50km if not set
+          if (distance <= maxDistance && distance <= mechanicMaxDistance) {
+            console.log('✅ Mechanic within distance limits');
+            
+            // Add mechanic to results (service type is just for display, not filtering)
+            console.log('✅ Mechanic added to results');
+            
+            mechanics.push({
+              id: doc.id,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              businessName: data.businessName,
+              rating: data.rating || 0,
+              totalJobs: data.totalJobs || 0,
+              yearsOfExperience: data.yearsOfExperience || 0,
+              specializations: data.specializations || [],
+              location: mechanicLocation,
+              preferences: data.preferences || { hourlyRate: 0, maxDistance: 50 },
+              isOnline: data.isOnline,
+              isAvailable: data.isAvailable,
+              distance: distance,
+            });
+          } else {
+            console.log('❌ Mechanic outside distance limits');
+            console.log('  Max allowed:', maxDistance, 'km');
+            console.log('  Mechanic max:', data.preferences?.maxDistance || 50, 'km');
           }
+        } else {
+          console.log('❌ Mechanic outside longitude bounds');
         }
+      } else {
+        console.log('❌ Mechanic has no location data');
       }
     });
 
+    console.log('📋 Final results:', mechanics.length, 'mechanics found');
+    mechanics.forEach((mechanic, index) => {
+      console.log(`  ${index + 1}. ${mechanic.firstName} ${mechanic.lastName} - ${mechanic.distance?.toFixed(1)}km`);
+    });
+
     // Sort by distance and rating, then take top 10
-    return mechanics
+    const sortedMechanics = mechanics
       .sort((a, b) => {
         // Primary sort by distance
         const distanceDiff = (a.distance || 0) - (b.distance || 0);
@@ -182,8 +244,15 @@ export const searchNearbyMechanics = async (
       })
       .slice(0, 10);
 
+    console.log('🏆 Top 10 mechanics after sorting:');
+    sortedMechanics.forEach((mechanic, index) => {
+      console.log(`  ${index + 1}. ${mechanic.firstName} ${mechanic.lastName} - ${mechanic.distance?.toFixed(1)}km - Rating: ${mechanic.rating}`);
+    });
+
+    return sortedMechanics;
+
   } catch (error) {
-    console.error('Error searching for nearby mechanics:', error);
+    console.error('❌ Error searching for nearby mechanics:', error);
     throw new Error('Failed to search for nearby mechanics');
   }
 };

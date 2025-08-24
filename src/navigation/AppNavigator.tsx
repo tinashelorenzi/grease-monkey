@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { LoginScreen, RegisterScreen, NearbyMechanicsScreen } from '../screens';
+import { LoginScreen, RegisterScreen, NearbyMechanicsScreen, RequestSessionScreen, ChatScreen, QuoteScreen } from '../screens';
 import { TabNavigator } from './TabNavigator';
 import { useAuth } from '../contexts/AuthContext';
 import { theme } from '../theme';
@@ -12,6 +12,9 @@ export type RootStackParamList = {
   Register: undefined;
   Main: undefined;
   NearbyMechanics: { serviceType?: string };
+  RequestSession: { requestId: string; mechanicName: string; serviceType: string };
+  Chat: { sessionId: string; mechanicName: string; requestId: string };
+  Quote: { requestId: string; mechanicName: string; serviceType: string; quoteAmount: number; quoteDescription: string };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -56,6 +59,30 @@ export const AppNavigator: React.FC = () => {
             <Stack.Screen
               name="NearbyMechanics"
               component={NearbyMechanicsScreen}
+              options={{
+                headerShown: false,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen
+              name="RequestSession"
+              component={RequestSessionScreen}
+              options={{
+                headerShown: false,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={{
+                headerShown: false,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen
+              name="Quote"
+              component={QuoteScreen}
               options={{
                 headerShown: false,
                 presentation: 'modal',

@@ -135,14 +135,23 @@ class AuthService {
   async getCurrentUserProfile(): Promise<UserProfile | null> {
     try {
       const user = auth.currentUser;
-      if (!user) return null;
+      console.log('🔍 Getting current user profile for user:', user?.uid);
+      if (!user) {
+        console.log('❌ No current user');
+        return null;
+      }
 
       const userDoc = await getDoc(doc(db, 'users', user.uid));
+      console.log('📄 User document exists:', userDoc.exists());
       if (userDoc.exists()) {
-        return userDoc.data() as UserProfile;
+        const profile = userDoc.data() as UserProfile;
+        console.log('📋 User profile data:', profile);
+        return profile;
       }
+      console.log('❌ User document does not exist');
       return null;
     } catch (error: any) {
+      console.error('❌ Error fetching user profile:', error);
       throw new Error('Failed to fetch user profile.');
     }
   }
